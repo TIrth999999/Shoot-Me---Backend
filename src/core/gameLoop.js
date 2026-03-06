@@ -2,6 +2,9 @@ import { MESSAGE_TYPES, SERVER_CONFIG } from "../config/constants.js";
 import { clamp, dist2D, normalize2D } from "../util/math.js";
 
 const TICK_MS = Math.floor(1000 / SERVER_CONFIG.tickRate);
+const SNAPSHOT_INTERVAL_SEC = 1 / SERVER_CONFIG.snapshotRate;
+const roundPos = (v) => Math.round(v * 100) / 100;
+const roundYaw = (v) => Math.round(v * 1000) / 1000;
 
 const pickNearestLivingPlayer = (room, zombie) => {
   let nearestId = null;
@@ -99,12 +102,17 @@ const createStateDiff = (room) => {
     players[playerId] = p
       ? {
           id: playerId,
-          position: p.position,
-          rotation: p.rotation,
+          position: {
+            x: roundPos(p.position.x),
+            y: roundPos(p.position.y || 0),
+            z: roundPos(p.position.z)
+          },
+          rotation: { yaw: roundYaw(p.rotation.yaw || 0) },
           hp: p.hp,
           score: p.score,
           isDead: p.isDead,
-          ping: p.ping
+          ping: p.ping,
+          seq: p.seq
         }
       : { id: playerId, removed: true };
   }
@@ -115,7 +123,11 @@ const createStateDiff = (room) => {
     if (!z) continue;
     zombies[zombieId] = {
       id: zombieId,
-      position: z.position,
+      position: {
+        x: roundPos(z.position.x),
+        y: roundPos(z.position.y || 0),
+        z: roundPos(z.position.z)
+      },
       hp: z.hp,
       targetPlayerId: z.targetPlayerId
     };
@@ -133,7 +145,8 @@ const createStateDiff = (room) => {
     removedZombieIds,
     gameTime: room.gameTime,
     spawnRateSec: room.spawnRateSec,
-    gameOver: room.gameOver
+    gameOver: room.gameOver,
+    serverTs: Date.now()
   };
 };
 
@@ -198,6 +211,7 @@ export class GameLoop {
     room.gameTime = 0;
     room.spawnRateSec = SERVER_CONFIG.world.spawnBaseRateSec;
     room.zombieSpawnAccumulator = 0;
+    room.snapshotAccumulator = 0;
     room.maxZombies = SERVER_CONFIG.world.maxZombiesBase;
     room.gameOver = false;
     room.gameOverAnnounced = false;
@@ -215,6 +229,7 @@ export class GameLoop {
   tick(dtSec) {
     for (const room of this.roomStore.rooms.values()) {
       room.gameTime += dtSec;
+      room.snapshotAccumulator += dtSec;
       updateDifficulty(room);
       spawnZombies(room, dtSec, this.roomStore);
       updateZombies(room, dtSec);
@@ -223,17 +238,20 @@ export class GameLoop {
         room.gameOver = true;
       }
 
-      const diff = createStateDiff(room);
-      if (
-        Object.keys(diff.players).length > 0 ||
-        Object.keys(diff.zombies).length > 0 ||
-        diff.removedZombieIds.length > 0 ||
-        room.gameOver
-      ) {
-        this.wsManager.broadcastToRoom(room.id, {
-          type: MESSAGE_TYPES.STATE_UPDATE,
-          ...diff
-        });
+      if (room.snapshotAccumulator >= SNAPSHOT_INTERVAL_SEC) {
+        room.snapshotAccumulator = 0;
+        const diff = createStateDiff(room);
+        if (
+          Object.keys(diff.players).length > 0 ||
+          Object.keys(diff.zombies).length > 0 ||
+          diff.removedZombieIds.length > 0 ||
+          room.gameOver
+        ) {
+          this.wsManager.broadcastToRoom(room.id, {
+            type: MESSAGE_TYPES.STATE_UPDATE,
+            ...diff
+          });
+        }
       }
 
       if (room.gameOver && !room.gameOverAnnounced) {

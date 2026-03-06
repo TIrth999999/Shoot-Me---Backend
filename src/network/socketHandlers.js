@@ -40,7 +40,8 @@ const joinRoom = ({ wsManager, roomStore, socket, room }) => {
       hp: p.hp,
       score: p.score,
       isDead: p.isDead,
-      ping: p.ping
+      ping: p.ping,
+      seq: p.seq
     };
   }
 
@@ -64,7 +65,8 @@ const joinRoom = ({ wsManager, roomStore, socket, room }) => {
     removedZombieIds: [],
     gameTime: room.gameTime,
     spawnRateSec: room.spawnRateSec,
-    gameOver: room.gameOver
+    gameOver: room.gameOver,
+    serverTs: Date.now()
   });
 };
 
@@ -126,6 +128,10 @@ export const registerSocketHandlers = ({ wsManager, roomStore, gameLoop }) => {
 
           const sanitizedRotation = sanitizeRotation(msg.rotation);
           const delta = dist2D(player.position, sanitizedPosition);
+          const yawDelta = Math.abs((player.rotation?.yaw || 0) - (sanitizedRotation?.yaw || 0));
+          if (delta < SERVER_CONFIG.world.minMoveDelta && yawDelta < SERVER_CONFIG.world.minYawDelta) {
+            break;
+          }
           if (delta > SERVER_CONFIG.world.antiCheatMaxMovePerTick) {
             break;
           }

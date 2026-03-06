@@ -25,6 +25,7 @@ const createRoomState = (ownerSocketId) => ({
   gameTime: 0,
   zombieCounter: 0,
   zombieSpawnAccumulator: 0,
+  snapshotAccumulator: 0,
   maxZombies: SERVER_CONFIG.world.maxZombiesBase,
   lastBroadcastState: {
     players: {},

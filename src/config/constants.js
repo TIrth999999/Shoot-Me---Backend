@@ -1,6 +1,7 @@
 export const SERVER_CONFIG = {
   port: Number(process.env.PORT || 8080),
   tickRate: 60,
+  snapshotRate: 15,
   maxPlayersPerRoom: 4,
   world: {
     width: 140,
@@ -26,7 +27,9 @@ export const SERVER_CONFIG = {
     playerHP: 100,
     playerMoveSpeed: 7,
     sprintMultiplier: 1.6,
-    antiCheatMaxMovePerTick: 2.2
+    antiCheatMaxMovePerTick: 2.2,
+    minMoveDelta: 0.035,
+    minYawDelta: 0.015
   }
 };
 
