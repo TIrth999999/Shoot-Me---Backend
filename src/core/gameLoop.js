@@ -52,6 +52,11 @@ const updateZombies = (room, dtSec) => {
   const speed = cfg.zombieBaseSpeed * speedMultiplier;
 
   for (const zombie of Object.values(room.zombies)) {
+    if (zombie.idle) {
+      zombie.targetPlayerId = null;
+      continue;
+    }
+
     if (zombie.position.y > 0) {
       zombie.velocityY -= cfg.zombieFallGravity * dtSec;
       zombie.position.y = Math.max(0, zombie.position.y + zombie.velocityY * dtSec);
@@ -129,7 +134,8 @@ const createStateDiff = (room) => {
         z: roundPos(z.position.z)
       },
       hp: z.hp,
-      targetPlayerId: z.targetPlayerId
+      targetPlayerId: z.targetPlayerId,
+      idle: !!z.idle
     };
   }
 
@@ -168,7 +174,7 @@ export class GameLoop {
     this.timer = null;
   }
 
-  handleShoot({ room, shooterId, direction }) {
+  handleShoot({ room, shooterId, direction, origin }) {
     const shooter = room.players[shooterId];
     if (!shooter || shooter.isDead) return;
 
@@ -178,19 +184,30 @@ export class GameLoop {
 
     let nearestHit = null;
     let nearestDist = Number.POSITIVE_INFINITY;
+    const shootOrigin = origin || {
+      x: shooter.position.x,
+      y: (shooter.position.y || 0) + SERVER_CONFIG.world.playerEyeHeight,
+      z: shooter.position.z
+    };
 
     for (const zombie of Object.values(room.zombies)) {
-      const toZombieX = zombie.position.x - shooter.position.x;
-      const toZombieZ = zombie.position.z - shooter.position.z;
-      const projected = toZombieX * direction.x + toZombieZ * direction.z;
+      const bodyBaseY = (zombie.position.y || 0) + SERVER_CONFIG.world.zombieHitBaseY;
+      const bodyTopY = bodyBaseY + SERVER_CONFIG.world.zombieHitHeight;
+      const bodyMidY = (bodyBaseY + bodyTopY) * 0.5;
+      const toZombieX = zombie.position.x - shootOrigin.x;
+      const toZombieY = bodyMidY - shootOrigin.y;
+      const toZombieZ = zombie.position.z - shootOrigin.z;
+      const projected = toZombieX * direction.x + toZombieY * direction.y + toZombieZ * direction.z;
 
       if (projected < 0 || projected > SERVER_CONFIG.world.bulletRange) continue;
 
-      const closestX = shooter.position.x + direction.x * projected;
-      const closestZ = shooter.position.z + direction.z * projected;
-      const missDist = Math.hypot(zombie.position.x - closestX, zombie.position.z - closestZ);
+      const closestX = shootOrigin.x + direction.x * projected;
+      const closestY = shootOrigin.y + direction.y * projected;
+      const closestZ = shootOrigin.z + direction.z * projected;
+      const horizontalMiss = Math.hypot(zombie.position.x - closestX, zombie.position.z - closestZ);
+      const withinBodyY = closestY >= bodyBaseY && closestY <= bodyTopY;
 
-      if (missDist <= SERVER_CONFIG.world.bulletRadius && projected < nearestDist) {
+      if (horizontalMiss <= SERVER_CONFIG.world.zombieHitRadius && withinBodyY && projected < nearestDist) {
         nearestDist = projected;
         nearestHit = zombie;
       }

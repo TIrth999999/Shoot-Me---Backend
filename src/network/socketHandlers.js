@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { MESSAGE_TYPES, SERVER_CONFIG } from "../config/constants.js";
 import { dist2D } from "../util/math.js";
-import { parseJson, sanitizeDirection, sanitizePosition, sanitizeRotation, sanitizeString } from "./validators.js";
+import { parseJson, sanitizeDirection, sanitizePosition, sanitizeRotation, sanitizeShootOrigin, sanitizeString } from "./validators.js";
 
 const sendError = (wsManager, socket, code, message) => {
   wsManager.send(socket, {
@@ -147,14 +147,30 @@ export const registerSocketHandlers = ({ wsManager, roomStore, gameLoop }) => {
         case MESSAGE_TYPES.SHOOT: {
           const room = roomStore.getRoomBySocket(socket.id);
           if (!room) break;
+          const player = room.players[socket.id];
+          if (!player || player.isDead) break;
 
           const direction = sanitizeDirection(msg.direction);
           if (!direction) break;
+          const origin = sanitizeShootOrigin(msg.origin, SERVER_CONFIG.world);
+          let safeOrigin = null;
+          if (origin) {
+            const eye = {
+              x: player.position.x,
+              y: (player.position.y || 0) + SERVER_CONFIG.world.playerEyeHeight,
+              z: player.position.z
+            };
+            const dist = Math.hypot(origin.x - eye.x, origin.y - eye.y, origin.z - eye.z);
+            if (dist <= 2.6) {
+              safeOrigin = origin;
+            }
+          }
 
           gameLoop.handleShoot({
             room,
             shooterId: socket.id,
-            direction
+            direction,
+            origin: safeOrigin
           });
           break;
         }

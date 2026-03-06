@@ -123,7 +123,8 @@ export class RoomStore {
       position: spawn,
       velocityY: 0,
       hp: SERVER_CONFIG.world.zombieHP,
-      targetPlayerId: null
+      targetPlayerId: null,
+      idle: Math.random() < 0.12
     };
     room.dirtyZombies.add(id);
   }

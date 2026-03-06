@@ -26,15 +26,28 @@ export const sanitizeDirection = (direction) => {
     return null;
   }
 
-  const length = Math.hypot(direction.x, direction.z);
+  const y = isFiniteNumber(direction.y) ? direction.y : 0;
+  const length = Math.hypot(direction.x, y, direction.z);
   if (length < 0.01 || length > 2) {
     return null;
   }
 
   return {
     x: direction.x / length,
-    y: 0,
+    y: y / length,
     z: direction.z / length
+  };
+};
+
+export const sanitizeShootOrigin = (origin, world) => {
+  if (!origin || !isFiniteNumber(origin.x) || !isFiniteNumber(origin.y) || !isFiniteNumber(origin.z)) {
+    return null;
+  }
+
+  return {
+    x: clamp(origin.x, -world.width * 0.5, world.width * 0.5),
+    y: clamp(origin.y, -2, 8),
+    z: clamp(origin.z, -world.depth * 0.5, world.depth * 0.5)
   };
 };
 
